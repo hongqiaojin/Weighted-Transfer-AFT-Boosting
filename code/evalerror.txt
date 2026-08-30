@@ -1,0 +1,10 @@
+evalerror <- function(preds, dtrain) {
+  T <- getinfo(dtrain, "label")
+  d <- attr(dtrain, "censor")
+  u <- log(T) - preds
+  fai <- dnorm(u)
+  Fai <- pnorm(u)
+  n <- d * log((1 / T) * fai)
+  m <- (1 - d) * log(1 - Fai)
+  list(metric = "deviance", value = -as.numeric(sum(m + n)))
+}

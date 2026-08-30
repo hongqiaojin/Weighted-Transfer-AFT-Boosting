@@ -1,0 +1,12 @@
+myobject <- function(preds, dtrain) {
+  T <- getinfo(dtrain, "label")
+  d <- attr(dtrain, "censor")
+  u <- log(T) - preds
+  fai <- dnorm(u)
+  Fai <- pnorm(u)
+  g <- outer(fai, 1 - Fai, "/")
+  g <- as.matrix(g)
+  grad <- as.numeric(-(d * u) - g %*% (1 - d))
+  hess <- as.numeric(d + ((1 - d) %*% g))
+  list(grad = grad, hess = hess)
+}
