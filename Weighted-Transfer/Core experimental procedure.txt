@@ -1,0 +1,47 @@
+run_compare_experiment - function(target_total_size, source_size, param, nround, ratio) {
+  target_train_size - round(target_total_size  ratio)
+  D_target - generate_data(target_total_size, rep(0, 6))
+  
+  idx_train - 1target_train_size
+  idx_test - (target_train_size + 1)target_total_size
+  
+  D_target_train_xgb - xgb.DMatrix(D_target$data[idx_train,], label = D_target$label[idx_train])
+  attr(D_target_train_xgb, censor) - D_target$censor[idx_train]
+  D_target_test_xgb - xgb.DMatrix(D_target$data[idx_test,], label = D_target$label[idx_test])
+  attr(D_target_test_xgb, censor) - D_target$censor[idx_test]
+  test_surv - Surv(D_target$label[idx_test], D_target$censor[idx_test])
+  
+  # Multivariable shift settings
+  shift_s1 - c(-1, -0.8, -0.5, 0.5, -0.3, 0) 
+  shift_s2 - c(1, 0.8, 0.6, -0.6, -0.4, -0.2)
+  
+  D_s1_raw - generate_data(source_size, shift_s1)
+  D_s1_xgb - xgb.DMatrix(D_s1_raw$data, label = D_s1_raw$label)
+  attr(D_s1_xgb, censor) - D_s1_raw$censor
+  
+  D_s2_raw - generate_data(source_size, shift_s2)
+  D_s2_xgb - xgb.DMatrix(D_s2_raw$data, label = D_s2_raw$label)
+  attr(D_s2_xgb, censor) - D_s2_raw$censor
+  
+  md_target - xgb.train(param, D_target_train_xgb, nround = nround)
+  md_s1     - xgb.train(param, D_s1_xgb, nround = nround)
+  md_s2     - xgb.train(param, D_s2_xgb, nround = nround)
+  
+  all_mds - list(md_target, md_s1, md_s2)
+  weights - sapply(all_mds, function(m) {
+    p - predict(m, D_target_train_xgb)
+    concordance(Surv(D_target$label[idx_train], D_target$censor[idx_train]) ~ exp(p))$concordance[1]
+  })
+  w_norm - weights  sum(weights)
+  
+  c_target - concordance(test_surv ~ exp(predict(md_target, D_target_test_xgb)))$concordance[1]
+  c_s1     - concordance(test_surv ~ exp(predict(md_s1, D_target_test_xgb)))$concordance[1]
+  c_s2     - concordance(test_surv ~ exp(predict(md_s2, D_target_test_xgb)))$concordance[1]
+  
+  p_w - w_norm[1]predict(md_target, D_target_test_xgb) + 
+    w_norm[2]predict(md_s1, D_target_test_xgb) + 
+    w_norm[3]predict(md_s2, D_target_test_xgb)
+  c_weighted - concordance(test_surv ~ exp(p_w))$concordance[1]
+  
+  return(c(Target_Only = c_target, Source1_Only = c_s1, Source2_Only = c_s2, Weighted = c_weighted))
+}
